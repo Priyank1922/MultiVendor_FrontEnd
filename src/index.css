@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 238 84% 57%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 258 84% 57%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 238 84% 57%;
+    --radius: 0.75rem;
+
+    /* AuraMart brand colours */
+    --aura-indigo: 238 84% 57%;
+    --aura-violet: 258 84% 62%;
+    --aura-pink: 315 80% 58%;
+    --aura-emerald: 158 64% 42%;
+    --aura-amber: 38 92% 50%;
+  }
+
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+}
+
+/* ── Scrollbar ─────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 9999px; }
+::-webkit-scrollbar-thumb { background: #c7d2e7; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Typography ────────────────────────────── */
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Keyframes ─────────────────────────────── */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(99,102,241,0.18); }
+  50%       { box-shadow: 0 0 28px rgba(99,102,241,0.42); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Animation classes ─────────────────────── */
+.animate-slide-in    { animation: slideInRight 0.25s ease-out forwards; }
+.animate-fade-in-up  { animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
+.animate-fade-in     { animation: fadeIn 0.4s ease forwards; }
+.animate-float       { animation: floatSlow 4s ease-in-out infinite; }
+.animate-scale-in    { animation: scaleIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+.animate-slide-down  { animation: slideDown 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+/* ── Glow & Brand effects ──────────────────── */
+.glow-indigo { animation: pulseGlow 3s ease-in-out infinite; }
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    hsl(238,84%,57%) 0%,
+    hsl(258,84%,72%) 25%,
+    hsl(315,80%,68%) 50%,
+    hsl(258,84%,72%) 75%,
+    hsl(238,84%,57%) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+/* ── Glassmorphism cards ───────────────────── */
+.glass-card {
+  background: rgba(255,255,255,0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226,232,240,0.7);
+}
+
+.glass-dark {
+  background: rgba(15,23,42,0.70);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51,65,85,0.6);
+}
+
+/* ── Premium focus ring ────────────────────── */
+*:focus-visible {
+  outline: 2px solid hsl(238,84%,57%);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Gradient backgrounds ──────────────────── */
+.bg-aura-gradient {
+  background: linear-gradient(135deg, hsl(238,84%,57%) 0%, hsl(258,84%,62%) 50%, hsl(315,80%,58%) 100%);
+}
+
+.text-aura-gradient {
+  background: linear-gradient(135deg, hsl(238,84%,57%), hsl(258,84%,72%), hsl(315,80%,68%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

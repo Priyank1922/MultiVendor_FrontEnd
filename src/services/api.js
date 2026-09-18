@@ -1,43 +1,17 @@
-// API Service Client with Live Backend Integration & Smart Mock Fallback Engine
+// API Service Client with Live Backend Integration & Neon PostgreSQL
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE = 'https://multivendor-q15b.onrender.com/';
+const USER_SESSION_KEY = 'aura_active_user_session';
 
-// Initial Mock Seed Data for Offline / Pre-backend testing
-const INITIAL_MOCK_DATA = {
-  users: [],
-  vendors: [],
-  categories: [
-    { id: 1, name: 'Electronics & Mobile Accessories', description: 'Smartphones, TWS earbuds, fast chargers & gadgets' },
-    { id: 2, name: 'Indian Ethnic Wear & Fashion', description: 'Handloom Sarees, Chikankari Kurtas, Silk Shawls & Dupattas' },
-    { id: 3, name: 'Home, Kitchen & Puja Essentials', description: 'Brass Diyas, Stainless Steel Cookers, Copper Bottles & Decor' },
-    { id: 4, name: 'Organic Spices & Foods', description: 'Kashmiri Saffron, Organic Turmeric, Darjeeling Tea & Dry Fruits' }
-  ],
-  products: [],
-  carts: {},
-  orders: []
-};
-// LocalStorage Persistence Key
-const STORAGE_KEY = 'ecommerce_data_store_v3';
+// Helper to make fetch requests with transparent error handling
+async function request(endpoint, options = {}) {
+  const url = endpoint.startsWith('http') 
+    ? endpoint 
+    : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
-function getStore() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_MOCK_DATA));
-    return INITIAL_MOCK_DATA;
-  }
-  return JSON.parse(saved);
-}
-
-function saveStore(store) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-}
-
-let isLiveBackend = true;
-
-// Helper to make fetch request with timeout and failover
-async function request(url, options = {}) {
+  let res;
   try {
-    const res = await fetch(url, {
+    res = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -45,40 +19,31 @@ async function request(url, options = {}) {
       },
       ...options
     });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(errText || `HTTP ${res.status}`);
-    }
-    if (res.status === 204) return null;
-    return await res.json();
-  } catch (err) {
-    if (url.startsWith('/api') && !url.startsWith('http')) {
+  } catch (netErr) {
+    throw new Error(`Unable to connect to backend server at ${API_BASE}. Please make sure the Spring Boot server is running.`);
+  }
+
+  if (!res.ok) {
+    let errorMsg = `Server error (HTTP ${res.status})`;
+    try {
+      const errorJson = await res.json();
+      errorMsg = errorJson.message || errorJson.error || JSON.stringify(errorJson);
+    } catch {
       try {
-        const directUrl = `http://localhost:8080${url}`;
-        const directRes = await fetch(directUrl, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...options.headers
-          },
-          ...options
-        });
-        if (directRes.ok) {
-          if (directRes.status === 204) return null;
-          return await directRes.json();
-        }
+        const errorText = await res.text();
+        if (errorText && errorText.length < 200) errorMsg = errorText;
       } catch {
-        // Fall through to mock handling
+        // use default
       }
     }
-    console.warn(`[API] Live backend call to ${url} failed (${err.message}). Falling back to local mock engine.`);
-    throw err;
+    throw new Error(errorMsg);
   }
+
+  if (res.status === 204) return null;
+  return await res.json();
 }
 
 // Maps Spring Boot ProductDTO fields to frontend product format
-// Backend: { id, name, description, price, stock, categoryId, categoryName, vendorId, vendorName }
-// Frontend: { id, name, sku, description, price, stockQuantity, isDeleted, categoryId, categoryName, vendorId, storeName }
 function mapBackendProduct(p) {
   return {
     id: p.id,
@@ -97,21 +62,24 @@ function mapBackendProduct(p) {
 
 // Maps Spring Boot CustomerDTO -> Frontend User
 function mapBackendCustomer(c) {
+  if (!c) return null;
   const names = (c.name || '').split(' ');
   return {
     id: c.id,
     username: c.email ? c.email.split('@')[0] : `user_${c.id}`,
+    name: c.name || '',
     email: c.email || '',
     role: 'CUSTOMER',
     profile: {
       profileId: c.id,
-      firstName: names[0] || 'Customer',
+      firstName: names[0] || c.name || 'Customer',
       lastName: names.slice(1).join(' ') || '',
       phone: c.phone || '',
       shippingAddress: c.address || '',
-      city: 'India',
-      state: '',
-      zipCode: '',
+      address: c.address || '',
+      city: 'Bengaluru',
+      state: 'KA',
+      zipCode: '560001',
       country: 'India'
     }
   };
@@ -119,6 +87,7 @@ function mapBackendCustomer(c) {
 
 // Maps Spring Boot VendorDTO -> Frontend Vendor
 function mapBackendVendor(v) {
+  if (!v) return null;
   return {
     id: v.id,
     storeName: v.companyName || v.name || `Vendor Store ${v.id}`,
@@ -134,390 +103,253 @@ export const api = {
   // Check backend health
   async checkBackendHealth() {
     try {
-      let res = await fetch(`${API_BASE}/product`, { method: 'GET' });
-      if (res.ok) {
-        isLiveBackend = true;
-        return true;
-      }
+      const res = await fetch(`${API_BASE}/product`, { method: 'GET' });
+      return res.ok;
     } catch {
-      // Fall through to direct try
-    }
-
-    try {
-      const directRes = await fetch(`http://localhost:8080/product`, { method: 'GET' });
-      isLiveBackend = directRes.ok;
-      return directRes.ok;
-    } catch {
-      isLiveBackend = false;
       return false;
     }
   },
 
   getIsLiveBackend() {
-    return isLiveBackend;
+    return true;
   },
 
-  // USERS / CUSTOMER
-  async createUser(userData) {
-    const cleanPhone = userData.phone ? userData.phone.replace(/\D/g, '').slice(-10) : '';
+  // ================= SESSION & AUTHENTICATION =================
+
+  getCurrentUser() {
     try {
-      const payload = {
-        name: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.username,
-        email: userData.email || `${userData.username}@example.com`,
-        password: userData.password || 'Password123!',
-        phone: cleanPhone || '9876543210',
-        address: userData.shippingAddress || userData.city || 'Bengaluru, India'
-      };
-      const res = await request(`${API_BASE}/customer`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return mapBackendCustomer(res);
+      const saved = localStorage.getItem(USER_SESSION_KEY);
+      return saved ? JSON.parse(saved) : null;
     } catch {
-      const store = getStore();
-      const newId = store.users.length + 1;
-      const newUser = {
-        id: newId,
-        username: userData.username,
-        email: userData.email,
-        role: userData.role || 'CUSTOMER',
-        profile: {
-          profileId: newId,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          phone: userData.phone,
-          shippingAddress: userData.shippingAddress,
-          city: userData.city,
-          state: userData.state,
-          zipCode: userData.zipCode,
-          country: userData.country
-        }
-      };
-      store.users.push(newUser);
-      saveStore(store);
-      return newUser;
+      return null;
     }
+  },
+
+  setCurrentUser(user) {
+    if (!user) {
+      localStorage.removeItem(USER_SESSION_KEY);
+    } else {
+      localStorage.setItem(USER_SESSION_KEY, JSON.stringify(user));
+    }
+  },
+
+  logout() {
+    localStorage.removeItem(USER_SESSION_KEY);
+  },
+
+  async login(email, password) {
+    const payload = {
+      email: (email || '').trim(),
+      password: (password || '').trim()
+    };
+    const res = await request('/customer/login', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const user = mapBackendCustomer(res);
+    this.setCurrentUser(user);
+    return user;
+  },
+
+  async register(userData) {
+    const cleanPhone = (userData.phone || '9876543210').replace(/\D/g, '').slice(-10);
+    const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.name || userData.username;
+    
+    const payload = {
+      name: fullName,
+      email: (userData.email || '').trim().toLowerCase(),
+      password: userData.password || 'password123',
+      phone: cleanPhone.length === 10 ? cleanPhone : '9876543210',
+      address: userData.address || userData.shippingAddress || '123 MG Road, Bengaluru, KA 560001'
+    };
+
+    const res = await request('/customer', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const user = mapBackendCustomer(res);
+    this.setCurrentUser(user);
+    return user;
+  },
+
+  // ================= USERS / CUSTOMERS =================
+
+  async createUser(userData) {
+    return this.register(userData);
   },
 
   async updateUser(id, userData) {
-    const cleanPhone = userData.phone ? userData.phone.replace(/\D/g, '').slice(-10) : '';
-    try {
-      const payload = {
-        name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.username,
-        email: userData.email,
-        password: userData.password || 'Password123!',
-        phone: cleanPhone || '9876543210',
-        address: userData.address || userData.shippingAddress || userData.city || 'Bengaluru, India'
-      };
-      const res = await request(`${API_BASE}/customer/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      });
-      return mapBackendCustomer(res);
-    } catch {
-      const store = getStore();
-      const idx = store.users.findIndex(u => u.id === Number(id));
-      if (idx !== -1) {
-        store.users[idx] = {
-          ...store.users[idx],
-          username: userData.username || store.users[idx].username,
-          email: userData.email || store.users[idx].email,
-          profile: {
-            ...store.users[idx].profile,
-            firstName: userData.firstName || store.users[idx].profile.firstName,
-            lastName: userData.lastName || store.users[idx].profile.lastName,
-            phone: userData.phone || store.users[idx].profile.phone,
-            shippingAddress: userData.address || userData.shippingAddress || store.users[idx].profile.shippingAddress,
-          }
-        };
-        saveStore(store);
-        return store.users[idx];
-      }
-      throw new Error('User not found');
+    const cleanPhone = (userData.phone || '').replace(/\D/g, '').slice(-10);
+    const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.name || userData.username;
+
+    const payload = {
+      name: fullName,
+      email: userData.email,
+      password: userData.password || 'password123',
+      phone: cleanPhone || '9876543210',
+      address: userData.address || userData.shippingAddress || 'Bengaluru, India'
+    };
+    const res = await request(`/customer/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    const user = mapBackendCustomer(res);
+    if (this.getCurrentUser()?.id === Number(id)) {
+      this.setCurrentUser(user);
     }
+    return user;
   },
 
   async getUserById(id) {
-    try {
-      const res = await request(`${API_BASE}/customer/${id}`);
-      return mapBackendCustomer(res);
-    } catch {
-      const store = getStore();
-      const user = store.users.find(u => u.id === Number(id));
-      if (!user) throw new Error('User not found');
-      return user;
-    }
+    const res = await request(`/customer/${id}`);
+    return mapBackendCustomer(res);
   },
 
   async getAllCustomers() {
     try {
-      const list = await request(`${API_BASE}/customer`);
+      const list = await request('/customer');
       if (Array.isArray(list)) {
         return list.map(mapBackendCustomer);
       }
-      return getStore().users;
-    } catch {
-      const store = getStore();
-      return store.users;
+      return [];
+    } catch (err) {
+      console.error('Failed to fetch customers:', err);
+      return [];
     }
   },
 
-  // VENDORS
+  // ================= VENDORS =================
+
   async createVendor(vendorData) {
-    const cleanPhone = (vendorData.phoneNumber || vendorData.phone || '').replace(/\D/g, '').slice(-10);
-    try {
-      const payload = {
-        name: vendorData.contactName || vendorData.name || vendorData.storeName || 'Vendor Contact',
-        companyName: vendorData.storeName || vendorData.companyName || 'Vendor Company',
-        email: vendorData.contactEmail || vendorData.email || 'vendor@example.com',
-        phone: cleanPhone || '9876543211',
-        address: vendorData.address || 'Bengaluru, India'
-      };
-      const res = await request(`${API_BASE}/vendor`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return mapBackendVendor(res);
-    } catch {
-      const store = getStore();
-      const newVendor = {
-        id: store.vendors.length + 1,
-        ...vendorData,
-        rating: 5.0,
-        totalProducts: 0
-      };
-      store.vendors.push(newVendor);
-      saveStore(store);
-      return newVendor;
-    }
+    const cleanPhone = (vendorData.phoneNumber || vendorData.phone || '9876543211').replace(/\D/g, '').slice(-10);
+    const payload = {
+      name: vendorData.contactName || vendorData.name || vendorData.storeName || 'Vendor Contact',
+      companyName: vendorData.storeName || vendorData.companyName || 'Vendor Company',
+      email: (vendorData.contactEmail || vendorData.email || `vendor_${Date.now()}@example.com`).trim().toLowerCase(),
+      phone: cleanPhone.length === 10 ? cleanPhone : '9876543211',
+      address: vendorData.address || 'Bengaluru, Karnataka, India'
+    };
+    const res = await request('/vendor', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return mapBackendVendor(res);
   },
 
   async updateVendor(id, vendorData) {
     const cleanPhone = (vendorData.phoneNumber || vendorData.phone || '').replace(/\D/g, '').slice(-10);
-    try {
-      const payload = {
-        name: vendorData.contactName || vendorData.name || vendorData.storeName || 'Vendor Contact',
-        companyName: vendorData.storeName || vendorData.companyName || 'Vendor Company',
-        email: vendorData.contactEmail || vendorData.email || 'vendor@example.com',
-        phone: cleanPhone || '9876543211',
-        address: vendorData.address || 'Bengaluru, India'
-      };
-      const res = await request(`${API_BASE}/vendor/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      });
-      return mapBackendVendor(res);
-    } catch {
-      const store = getStore();
-      const idx = store.vendors.findIndex(v => v.id === Number(id));
-      if (idx !== -1) {
-        store.vendors[idx] = {
-          ...store.vendors[idx],
-          ...vendorData,
-        };
-        saveStore(store);
-        return store.vendors[idx];
-      }
-      throw new Error('Vendor not found');
-    }
+    const payload = {
+      name: vendorData.contactName || vendorData.name || vendorData.storeName || 'Vendor Contact',
+      companyName: vendorData.storeName || vendorData.companyName || 'Vendor Company',
+      email: vendorData.contactEmail || vendorData.email,
+      phone: cleanPhone || '9876543211',
+      address: vendorData.address || 'Bengaluru, India'
+    };
+    const res = await request(`/vendor/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    return mapBackendVendor(res);
   },
 
   async getAllVendors() {
     try {
-      const list = await request(`${API_BASE}/vendor`);
-      if (Array.isArray(list) && list.length > 0) {
+      const list = await request('/vendor');
+      if (Array.isArray(list)) {
         return list.map(mapBackendVendor);
       }
-      return getStore().vendors;
-    } catch {
-      const store = getStore();
-      return store.vendors;
+      return [];
+    } catch (err) {
+      console.error('Failed to fetch vendors:', err);
+      return [];
     }
   },
 
-  // CATEGORIES
+  // ================= CATEGORIES =================
+
   async createCategory(catData) {
-    try {
-      return await request(`${API_BASE}/category`, {
-        method: 'POST',
-        body: JSON.stringify(catData)
-      });
-    } catch {
-      const store = getStore();
-      const newCat = {
-        id: store.categories.length + 1,
-        name: catData.name,
-        description: catData.description
-      };
-      store.categories.push(newCat);
-      saveStore(store);
-      return newCat;
-    }
+    const payload = {
+      name: (catData.name || '').trim(),
+      description: catData.description || 'Product category'
+    };
+    return await request('/category', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async updateCategory(id, catData) {
+    return await request(`/category/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(catData)
+    });
   },
 
   async getAllCategories() {
     try {
-      const list = await request(`${API_BASE}/category`);
-      if (Array.isArray(list) && list.length > 0) {
+      const list = await request('/category');
+      if (Array.isArray(list)) {
         return list;
       }
-      return getStore().categories;
-    } catch {
-      const store = getStore();
-      return store.categories;
+      return [];
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+      return [];
     }
   },
 
-  // PRODUCTS
+  // ================= PRODUCTS =================
+
   async createProduct(productData) {
-    try {
-      const backendPayload = {
-        name: productData.name,
-        description: productData.description || 'Product listing',
-        price: parseFloat(productData.price),
-        stock: parseInt(productData.stockQuantity, 10) || 100,
-        categoryId: Number(productData.categoryId),
-        vendorId: Number(productData.vendorId),
-      };
-      const result = await request(`${API_BASE}/product`, {
-        method: 'POST',
-        body: JSON.stringify(backendPayload)
-      });
-      return mapBackendProduct(result);
-    } catch {
-      const store = getStore();
-      const cat = store.categories.find(c => c.id === Number(productData.categoryId));
-      const vendor = store.vendors.find(v => v.id === Number(productData.vendorId));
-      const newProd = {
-        id: store.products.length + 1,
-        name: productData.name,
-        sku: productData.sku,
-        description: productData.description,
-        price: parseFloat(productData.price),
-        stockQuantity: parseInt(productData.stockQuantity, 10),
-        isDeleted: false,
-        categoryId: Number(productData.categoryId),
-        categoryName: cat ? cat.name : 'General',
-        vendorId: Number(productData.vendorId),
-        storeName: vendor ? vendor.storeName : 'Vendor Store'
-      };
-      store.products.push(newProd);
-      saveStore(store);
-      return newProd;
-    }
+    const backendPayload = {
+      name: productData.name,
+      description: productData.description || 'Quality product listing',
+      price: parseFloat(productData.price) || 99.99,
+      stock: parseInt(productData.stockQuantity || productData.stock, 10) || 50,
+      categoryId: Number(productData.categoryId),
+      vendorId: Number(productData.vendorId),
+    };
+    const result = await request('/product', {
+      method: 'POST',
+      body: JSON.stringify(backendPayload)
+    });
+    return mapBackendProduct(result);
   },
 
   async updateProduct(id, productData) {
-    try {
-      const backendPayload = {
-        name: productData.name,
-        description: productData.description || 'Product listing',
-        price: parseFloat(productData.price),
-        stock: parseInt(productData.stockQuantity || productData.stock, 10) || 100,
-        categoryId: Number(productData.categoryId),
-        vendorId: Number(productData.vendorId),
-      };
-      const result = await request(`${API_BASE}/product/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(backendPayload)
-      });
-      return mapBackendProduct(result);
-    } catch {
-      const store = getStore();
-      const idx = store.products.findIndex(p => p.id === Number(id));
-      if (idx !== -1) {
-        const cat = store.categories.find(c => c.id === Number(productData.categoryId));
-        const vendor = store.vendors.find(v => v.id === Number(productData.vendorId));
-        store.products[idx] = {
-          ...store.products[idx],
-          name: productData.name,
-          sku: productData.sku || store.products[idx].sku,
-          description: productData.description,
-          price: parseFloat(productData.price),
-          stockQuantity: parseInt(productData.stockQuantity || productData.stock, 10),
-          categoryId: Number(productData.categoryId),
-          categoryName: cat ? cat.name : store.products[idx].categoryName,
-          vendorId: Number(productData.vendorId),
-          storeName: vendor ? vendor.storeName : store.products[idx].storeName
-        };
-        saveStore(store);
-        return store.products[idx];
-      }
-      throw new Error('Product not found');
-    }
-  },
-
-  async updateCategory(id, catData) {
-    try {
-      return await request(`${API_BASE}/category/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(catData)
-      });
-    } catch {
-      const store = getStore();
-      const idx = store.categories.findIndex(c => c.id === Number(id));
-      if (idx !== -1) {
-        store.categories[idx] = {
-          ...store.categories[idx],
-          name: catData.name,
-          description: catData.description
-        };
-        saveStore(store);
-        return store.categories[idx];
-      }
-      throw new Error('Category not found');
-    }
+    const backendPayload = {
+      name: productData.name,
+      description: productData.description || 'Quality product listing',
+      price: parseFloat(productData.price) || 99.99,
+      stock: parseInt(productData.stockQuantity || productData.stock, 10) || 50,
+      categoryId: Number(productData.categoryId),
+      vendorId: Number(productData.vendorId),
+    };
+    const result = await request(`/product/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(backendPayload)
+    });
+    return mapBackendProduct(result);
   },
 
   async createBatchProducts(productsArray) {
-    try {
-      return await request(`${API_BASE}/products/batch`, {
-        method: 'POST',
-        body: JSON.stringify({ products: productsArray })
-      });
-    } catch {
-      const store = getStore();
-      const createdList = productsArray.map((p, idx) => {
-        const cat = store.categories.find(c => c.id === Number(p.categoryId));
-        const vendor = store.vendors.find(v => v.id === Number(p.vendorId));
-        return {
-          id: store.products.length + idx + 1,
-          name: p.name,
-          sku: p.sku,
-          description: p.description,
-          price: parseFloat(p.price),
-          stockQuantity: parseInt(p.stockQuantity, 10),
-          isDeleted: false,
-          categoryId: Number(p.categoryId),
-          categoryName: cat ? cat.name : 'General',
-          vendorId: Number(p.vendorId),
-          storeName: vendor ? vendor.storeName : 'Vendor Store'
-        };
-      });
-      store.products.push(...createdList);
-      saveStore(store);
-      return createdList;
+    const created = [];
+    for (const prod of productsArray) {
+      try {
+        const res = await this.createProduct(prod);
+        created.push(res);
+      } catch (err) {
+        console.error('Failed to create product in batch:', prod.name, err);
+      }
     }
+    return created;
   },
 
   async searchProducts(params = {}) {
-    const query = new URLSearchParams();
-    if (params.categoryId) query.append('categoryId', params.categoryId);
-    if (params.vendorId) query.append('vendorId', params.vendorId);
-    if (params.minPrice) query.append('minPrice', params.minPrice);
-    if (params.maxPrice) query.append('maxPrice', params.maxPrice);
-    if (params.search) query.append('search', params.search);
-    if (params.page !== undefined) query.append('page', params.page);
-    if (params.size !== undefined) query.append('size', params.size);
-    if (params.sortBy) query.append('sortBy', params.sortBy);
-    if (params.sortDir) query.append('sortDir', params.sortDir);
-
     try {
-      // Fetch all products from Spring Boot backend (GET /product)
-      const backendProducts = await request(`${API_BASE}/product`);
-      let list = backendProducts.map(mapBackendProduct);
+      const backendProducts = await request('/product');
+      let list = Array.isArray(backendProducts) ? backendProducts.map(mapBackendProduct) : [];
 
-      // Client-side filtering (backend has no combined filter endpoint)
       if (params.categoryId) {
         list = list.filter(p => p.categoryId === Number(params.categoryId));
       }
@@ -532,7 +364,11 @@ export const api = {
       }
       if (params.search) {
         const q = params.search.toLowerCase();
-        list = list.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+        list = list.filter(p => 
+          (p.name && p.name.toLowerCase().includes(q)) || 
+          (p.description && p.description.toLowerCase().includes(q)) ||
+          (p.sku && p.sku.toLowerCase().includes(q))
+        );
       }
 
       // Sort
@@ -544,7 +380,7 @@ export const api = {
         if (typeof valA === 'string') {
           return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
         }
-        return sortDir === 'asc' ? valA - valB : valB - valA;
+        return sortDir === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
       });
 
       // Pagination
@@ -565,222 +401,102 @@ export const api = {
         last: page >= totalPages - 1,
         empty: content.length === 0
       };
-    } catch {
-      const store = getStore();
-      let list = store.products.filter(p => !p.isDeleted);
-
-      if (params.categoryId) {
-        list = list.filter(p => p.categoryId === Number(params.categoryId));
-      }
-      if (params.vendorId) {
-        list = list.filter(p => p.vendorId === Number(params.vendorId));
-      }
-      if (params.minPrice) {
-        list = list.filter(p => p.price >= parseFloat(params.minPrice));
-      }
-      if (params.maxPrice) {
-        list = list.filter(p => p.price <= parseFloat(params.maxPrice));
-      }
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        list = list.filter(p => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
-      }
-
-      // Sort
-      const sortBy = params.sortBy || 'id';
-      const sortDir = (params.sortDir || 'asc').toLowerCase();
-      list.sort((a, b) => {
-        let valA = a[sortBy];
-        let valB = b[sortBy];
-        if (typeof valA === 'string') {
-          return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        }
-        return sortDir === 'asc' ? valA - valB : valB - valA;
-      });
-
-      // Pagination
-      const page = Number(params.page) || 0;
-      const size = Number(params.size) || 10;
-      const totalElements = list.length;
-      const totalPages = Math.ceil(totalElements / size) || 1;
-      const start = page * size;
-      const content = list.slice(start, start + size);
-
+    } catch (err) {
+      console.error('Failed to search products:', err);
       return {
-        content,
-        totalPages,
-        totalElements,
-        size,
-        number: page,
-        first: page === 0,
-        last: page >= totalPages - 1,
-        empty: content.length === 0
+        content: [],
+        totalPages: 1,
+        totalElements: 0,
+        size: params.size || 10,
+        number: 0,
+        first: true,
+        last: true,
+        empty: true
       };
     }
   },
 
   async deleteProduct(id) {
-    try {
-      // Use fetch directly since backend returns plain text, not JSON
-      const res = await fetch(`${API_BASE}/product/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-      });
-      if (res.ok) return null;
-      throw new Error(`Delete failed: HTTP ${res.status}`);
-    } catch {
-      const store = getStore();
-      const target = store.products.find(p => p.id === Number(id));
-      if (target) {
-        target.isDeleted = true;
-        saveStore(store);
-      }
-      return null;
-    }
+    const res = await fetch(`${API_BASE}/product/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    });
+    if (res.ok) return null;
+    throw new Error(`Delete failed: HTTP ${res.status}`);
   },
 
-  // CART
+  // ================= CART =================
+
   async addProductToCart(customerProfileId, productId) {
-    try {
-      return await request(`${API_BASE}/cart/items`, {
-        method: 'POST',
-        body: JSON.stringify({ customerProfileId, productId })
-      });
-    } catch {
-      const store = getStore();
-      let cart = store.carts[customerProfileId];
-      if (!cart) {
-        cart = { cartId: customerProfileId, customerProfileId, products: [], totalItems: 0 };
-        store.carts[customerProfileId] = cart;
-      }
-      const prod = store.products.find(p => p.id === Number(productId));
-      if (prod && !cart.products.some(p => p.id === prod.id)) {
-        cart.products.push(prod);
-        cart.totalItems = cart.products.length;
-        saveStore(store);
-      }
-      return cart;
+    const key = `aura_cart_${customerProfileId}`;
+    let cart = JSON.parse(localStorage.getItem(key) || '{"products":[]}');
+    
+    // Fetch product details
+    const backendProducts = await request('/product');
+    const prod = backendProducts.map(mapBackendProduct).find(p => p.id === Number(productId));
+    if (prod && !cart.products.some(p => p.id === prod.id)) {
+      cart.products.push(prod);
+      cart.totalItems = cart.products.length;
+      localStorage.setItem(key, JSON.stringify(cart));
     }
+    return cart;
   },
 
   async getCartByCustomerProfileId(customerProfileId) {
-    try {
-      return await request(`${API_BASE}/cart/${customerProfileId}`);
-    } catch {
-      const store = getStore();
-      const cart = store.carts[customerProfileId] || {
-        cartId: customerProfileId,
-        customerProfileId: Number(customerProfileId),
-        products: [],
-        totalItems: 0
-      };
-      return cart;
-    }
+    if (!customerProfileId) return { products: [], totalItems: 0 };
+    const key = `aura_cart_${customerProfileId}`;
+    const cart = JSON.parse(localStorage.getItem(key) || '{"products":[], "totalItems": 0}');
+    return cart;
   },
 
   async removeProductFromCart(customerProfileId, productId) {
-    try {
-      return await request(`${API_BASE}/cart/items?customerProfileId=${customerProfileId}&productId=${productId}`, {
-        method: 'DELETE'
-      });
-    } catch {
-      const store = getStore();
-      let cart = store.carts[customerProfileId];
-      if (cart) {
-        cart.products = cart.products.filter(p => p.id !== Number(productId));
-        cart.totalItems = cart.products.length;
-        saveStore(store);
-      }
-      return cart || { cartId: customerProfileId, customerProfileId, products: [], totalItems: 0 };
-    }
+    const key = `aura_cart_${customerProfileId}`;
+    let cart = JSON.parse(localStorage.getItem(key) || '{"products":[]}');
+    cart.products = cart.products.filter(p => p.id !== Number(productId));
+    cart.totalItems = cart.products.length;
+    localStorage.setItem(key, JSON.stringify(cart));
+    return cart;
   },
 
-  // ORDERS
+  // ================= ORDERS =================
+
   async createOrder(orderRequest) {
+    const payload = {
+      orderDate: new Date().toISOString().split('T')[0],
+      totalAmount: parseFloat(orderRequest.totalAmount) || 0,
+      customerId: Number(orderRequest.customerProfileId)
+    };
+    
     try {
-      return await request(`${API_BASE}/orders`, {
+      const order = await request('/orders', {
         method: 'POST',
-        body: JSON.stringify(orderRequest)
+        body: JSON.stringify(payload)
       });
-    } catch {
-      const store = getStore();
-      const user = store.users.find(u => u.profile?.profileId === Number(orderRequest.customerProfileId));
-      const customerName = user ? `${user.profile.firstName} ${user.profile.lastName}` : 'Aarav Sharma';
-      
-      let totalAmount = 0;
-      const items = orderRequest.items.map((item, idx) => {
-        const prod = store.products.find(p => p.id === Number(item.productId)) || { name: 'Product ' + item.productId, sku: 'SKU-' + item.productId, price: 99.99 };
-        const unitPrice = prod.price;
-        const subtotal = Number((unitPrice * item.quantity).toFixed(2));
-        totalAmount += subtotal;
-        return {
-          itemId: idx + 101,
-          productId: Number(item.productId),
-          productName: prod.name,
-          productSku: prod.sku,
-          quantity: Number(item.quantity),
-          unitPrice,
-          subtotal
-        };
-      });
-
-      const newOrder = {
-        id: store.orders.length + 1,
-        orderNumber: 'ORD-' + Math.random().toString(36).substring(2, 10).toUpperCase(),
-        customerProfileId: Number(orderRequest.customerProfileId),
-        customerName,
-        totalAmount: Number(totalAmount.toFixed(2)),
-        status: 'PENDING',
-        orderDate: new Date().toISOString(),
-        items
-      };
-
-      store.orders.unshift(newOrder);
-
-      // Clear cart items that were ordered
-      if (store.carts[orderRequest.customerProfileId]) {
-        const orderedProdIds = orderRequest.items.map(i => Number(i.productId));
-        store.carts[orderRequest.customerProfileId].products = store.carts[orderRequest.customerProfileId].products.filter(
-          p => !orderedProdIds.includes(p.id)
-        );
-        store.carts[orderRequest.customerProfileId].totalItems = store.carts[orderRequest.customerProfileId].products.length;
-      }
-
-      saveStore(store);
-      return newOrder;
+      // Clear cart
+      const key = `aura_cart_${orderRequest.customerProfileId}`;
+      localStorage.removeItem(key);
+      return order;
+    } catch (err) {
+      throw new Error('Order placement failed: ' + err.message);
     }
   },
 
   async getOrdersByCustomerId(customerId) {
     try {
-      return await request(`${API_BASE}/orders/customer/${customerId}`);
-    } catch {
-      const store = getStore();
-      return store.orders.filter(o => o.customerProfileId === Number(customerId));
-    }
-  },
-
-  async removeOrderItem(orderId, orderItemId) {
-    try {
-      return await request(`${API_BASE}/orders/${orderId}/items/${orderItemId}`, {
-        method: 'DELETE'
-      });
-    } catch {
-      const store = getStore();
-      const order = store.orders.find(o => o.id === Number(orderId));
-      if (order) {
-        order.items = order.items.filter(item => item.itemId !== Number(orderItemId));
-        order.totalAmount = Number(order.items.reduce((acc, item) => acc + item.subtotal, 0).toFixed(2));
-        saveStore(store);
-        return order;
+      const allOrders = await request('/orders');
+      if (Array.isArray(allOrders)) {
+        return allOrders.filter(o => o.customerId === Number(customerId) || o.customer?.id === Number(customerId));
       }
-      throw new Error('Order not found');
+      return [];
+    } catch (err) {
+      console.error('Failed to get orders:', err);
+      return [];
     }
   },
 
-  // Reset Mock Store to initial state
-  resetMockStore() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_MOCK_DATA));
-    return INITIAL_MOCK_DATA;
+  async removeOrderItem(orderId) {
+    return await request(`/orders/${orderId}`, {
+      method: 'DELETE'
+    });
   }
 };

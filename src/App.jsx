@@ -8,6 +8,7 @@ import OrdersView from './components/OrdersView';
 import BatchSellerHub from './components/BatchSellerHub';
 import HibernateShowcase from './components/HibernateShowcase';
 import CreateEntityModal from './components/CreateEntityModal';
+import AuthModal from './components/AuthModal';
 import Toast from './components/Toast';
 import { api } from './services/api';
 
@@ -16,15 +17,16 @@ function AppContent() {
   const [isLiveBackend, setIsLiveBackend] = useState(false);
   const [toasts, setToasts] = useState([]);
   
-  // Domain Data State
-  const [users, setUsers] = useState([]);
-  const [activeCustomer, setActiveCustomer] = useState(null);
+  // Active Customer Session (Restored from explicit login or starts as null)
+  const [activeCustomer, setActiveCustomer] = useState(() => api.getCurrentUser());
   const [categories, setCategories] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [cartCount, setCartCount] = useState(0);
   
-  // Modal State
+  // Modals State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('login');
 
   // Toast Trigger Helper
   const showToast = useCallback((type, title, message) => {
@@ -36,7 +38,27 @@ function AppContent() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Load Initial Backend Data & Categories/Vendors
+  // Open Auth Modal helper
+  const openAuth = useCallback((mode = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  }, []);
+
+  // Handle Logout
+  const handleLogout = useCallback(() => {
+    api.logout();
+    setActiveCustomer(null);
+    setCartCount(0);
+    showToast('info', 'Signed Out', 'You have been logged out successfully.');
+  }, [showToast]);
+
+  // Handle Login / Register Success
+  const handleAuthSuccess = useCallback((user) => {
+    setActiveCustomer(user);
+    showToast('success', 'Authenticated', `Signed in as ${user.name || user.username}`);
+  }, [showToast]);
+
+  // Load Initial Backend Data (Categories & Vendors)
   const initData = useCallback(async () => {
     const isLive = await api.checkBackendHealth();
     setIsLiveBackend(isLive);
@@ -47,14 +69,6 @@ function AppContent() {
 
       const vends = await api.getAllVendors();
       setVendors(vends);
-
-      const customersList = await api.getAllCustomers();
-      setUsers(customersList);
-      if (customersList.length > 0) {
-        setActiveCustomer(customersList[0]);
-      } else {
-        setActiveCustomer(null);
-      }
     } catch (err) {
       console.error('Data Init Error:', err);
     }
@@ -66,8 +80,11 @@ function AppContent() {
 
   // Update Cart Count for Active Customer
   const updateCartCount = useCallback(async () => {
-    if (!activeCustomer) return;
-    const profileId = activeCustomer.profile?.profileId || activeCustomer.id || 1;
+    if (!activeCustomer) {
+      setCartCount(0);
+      return;
+    }
+    const profileId = activeCustomer.profile?.profileId || activeCustomer.id;
     try {
       const cart = await api.getCartByCustomerProfileId(profileId);
       setCartCount(cart.products?.length || 0);
@@ -81,10 +98,15 @@ function AppContent() {
   }, [updateCartCount]);
 
   const handleAddToCart = async (product) => {
-    const profileId = activeCustomer?.profile?.profileId || activeCustomer?.id || 1;
+    if (!activeCustomer) {
+      showToast('info', 'Sign In Required', 'Please sign in or create an account to add items to your cart.');
+      openAuth('login');
+      return;
+    }
+    const profileId = activeCustomer.profile?.profileId || activeCustomer.id;
     try {
       await api.addProductToCart(profileId, product.id);
-      showToast('success', 'Added to Cart', `"${product.name}" added to cart for @${activeCustomer?.username || 'user'}.`);
+      showToast('success', 'Added to Cart', `"${product.name}" added to cart for @${activeCustomer.name || activeCustomer.username}.`);
       updateCartCount();
     } catch (err) {
       showToast('error', 'Add to Cart Failed', err.message);
@@ -93,8 +115,8 @@ function AppContent() {
 
   const handleEntityCreated = (type, entity) => {
     if (type === 'user') {
-      setUsers(prev => [...prev, entity]);
       setActiveCustomer(entity);
+      showToast('success', 'Account Registered', `Logged in as ${entity.name || entity.username}.`);
     } else if (type === 'category') {
       setCategories(prev => [...prev, entity]);
     } else if (type === 'vendor') {
@@ -105,14 +127,15 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50/60 flex flex-col antialiased text-slate-900">
       
-      {/* Navbar Header with React Router NavLinks */}
+      {/* Navbar Header */}
       <Navbar
         cartCount={cartCount}
         activeCustomer={activeCustomer}
         setActiveCustomer={setActiveCustomer}
-        users={users}
-        isLiveBackend={isLiveBackend}
+        onOpenAuthModal={() => openAuth('login')}
+        onLogout={handleLogout}
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
+        onShowToast={showToast}
       />
 
       {/* Main View Container with Routes */}
@@ -125,6 +148,7 @@ function AppContent() {
                 categories={categories}
                 vendors={vendors}
                 activeCustomer={activeCustomer}
+                onOpenAuthModal={() => openAuth('register')}
               />
             }
           />
@@ -138,6 +162,7 @@ function AppContent() {
                 activeCustomer={activeCustomer}
                 onAddToCart={handleAddToCart}
                 onShowToast={showToast}
+                onOpenAuthModal={() => openAuth('login')}
               />
             }
           />
@@ -148,6 +173,7 @@ function AppContent() {
               <CartView
                 activeCustomer={activeCustomer}
                 onShowToast={showToast}
+                onOpenAuthModal={() => openAuth('login')}
                 onOrderPlaced={() => {
                   updateCartCount();
                   navigate('/orders');
@@ -162,6 +188,7 @@ function AppContent() {
               <OrdersView
                 activeCustomer={activeCustomer}
                 onShowToast={showToast}
+                onOpenAuthModal={() => openAuth('login')}
               />
             }
           />
@@ -189,7 +216,16 @@ function AppContent() {
         </Routes>
       </main>
 
-      {/* Entity Creation Modal */}
+      {/* Authentication Modal (Sign In / Register) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+        onAuthSuccess={handleAuthSuccess}
+        onShowToast={showToast}
+      />
+
+      {/* Entity Creation Modal (Vendors, Categories, Products) */}
       <CreateEntityModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}

@@ -4,18 +4,18 @@ import {
   ShoppingCart, 
   Trash2, 
   ArrowRight, 
-  CheckCircle2, 
   ShieldCheck, 
   UserCheck, 
   Store, 
-  Tag, 
-  RefreshCw 
+  RefreshCw,
+  LogIn
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function CartView({
   activeCustomer,
   onShowToast,
+  onOpenAuthModal,
   onOrderPlaced
 }) {
   const [cart, setCart] = useState({ products: [], totalItems: 0 });
@@ -23,9 +23,13 @@ export default function CartView({
   const [quantities, setQuantities] = useState({});
   const [placingOrder, setPlacingOrder] = useState(false);
 
-  const customerProfileId = activeCustomer?.profile?.profileId || activeCustomer?.id || 1;
+  const customerProfileId = activeCustomer?.profile?.profileId || activeCustomer?.id;
 
   const fetchCart = useCallback(async () => {
+    if (!customerProfileId) {
+      setCart({ products: [], totalItems: 0 });
+      return;
+    }
     setLoading(true);
     try {
       const data = await api.getCartByCustomerProfileId(customerProfileId);
@@ -36,7 +40,7 @@ export default function CartView({
       });
       setQuantities(initialQty);
     } catch (err) {
-      onShowToast('error', 'Fetch Cart Failed', err.message);
+      if (onShowToast) onShowToast('error', 'Fetch Cart Failed', err.message);
     } finally {
       setLoading(false);
     }
@@ -47,12 +51,13 @@ export default function CartView({
   }, [fetchCart]);
 
   const handleRemoveFromCart = async (productId, name) => {
+    if (!customerProfileId) return;
     try {
       const updated = await api.removeProductFromCart(customerProfileId, productId);
       setCart(updated);
-      onShowToast('info', 'Item Removed', `Removed "${name}" from cart.`);
+      if (onShowToast) onShowToast('info', 'Item Removed', `Removed "${name}" from cart.`);
     } catch (err) {
-      onShowToast('error', 'Remove Failed', err.message);
+      if (onShowToast) onShowToast('error', 'Remove Failed', err.message);
     }
   };
 
@@ -69,6 +74,11 @@ export default function CartView({
   };
 
   const handleCheckout = async () => {
+    if (!activeCustomer) {
+      if (onShowToast) onShowToast('info', 'Sign In Required', 'Please sign in to complete your checkout.');
+      if (onOpenAuthModal) onOpenAuthModal();
+      return;
+    }
     if (cart.products.length === 0) return;
     setPlacingOrder(true);
     try {
@@ -77,17 +87,21 @@ export default function CartView({
         quantity: quantities[p.id] || 1
       }));
 
+      const subtotal = calculateSubtotal();
       const newOrder = await api.createOrder({
         customerProfileId,
+        totalAmount: subtotal,
         items: orderItems
       });
 
-      onShowToast('success', 'Order Placed!', `Order #${newOrder.orderNumber || newOrder.id} placed successfully!`);
-      onOrderPlaced(newOrder);
+      if (onShowToast) onShowToast('success', 'Order Placed!', `Order placed successfully into Neon DB!`);
+      if (onOrderPlaced) onOrderPlaced(newOrder);
       fetchCart();
     } catch (err) {
-      onShowToast('error', 'Checkout Failed', err.message);
-    } font-semibold;
+      if (onShowToast) onShowToast('error', 'Checkout Failed', err.message);
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   return (
@@ -110,15 +124,39 @@ export default function CartView({
             </div>
             <p className="text-sm text-slate-500 flex items-center gap-1.5">
               <UserCheck className="w-4 h-4 text-slate-400" />
-              Active Customer: <strong className="text-slate-900">{activeCustomer?.profile?.firstName ? `${activeCustomer.profile.firstName} ${activeCustomer.profile.lastName}` : activeCustomer?.username || 'Aarav Sharma'}</strong> (Profile #{customerProfileId})
+              {activeCustomer ? (
+                <>Active Account: <strong className="text-slate-900">{activeCustomer.name || activeCustomer.username}</strong> ({activeCustomer.email})</>
+              ) : (
+                <span className="text-amber-600 font-medium">Currently browsing as Guest</span>
+              )}
             </p>
           </div>
           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span>🇮🇳</span>
-            Consolidated Cart
+            Neon DB Sync
           </span>
         </div>
       </div>
+
+      {/* Guest Notice if Not Logged In */}
+      {!activeCustomer && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/80 rounded-2xl p-6 text-center space-y-3">
+          <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md shadow-indigo-500/20">
+            <LogIn className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900">Sign in to manage your shopping cart</h3>
+          <p className="text-xs text-slate-600 max-w-md mx-auto">
+            Log in with your Neon DB account to view your saved items, synchronize across devices, and place secure orders.
+          </p>
+          <button
+            onClick={onOpenAuthModal}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
+          >
+            <LogIn className="w-4 h-4" />
+            Sign In / Register
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="py-16 text-center text-slate-500">
@@ -127,7 +165,7 @@ export default function CartView({
         </div>
       )}
 
-      {!loading && cart.products.length === 0 && (
+      {activeCustomer && !loading && cart.products.length === 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
           <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-900 mb-1">Your Shopping Cart is Empty</h3>
@@ -137,7 +175,7 @@ export default function CartView({
         </div>
       )}
 
-      {!loading && cart.products.length > 0 && (
+      {activeCustomer && !loading && cart.products.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Cart Products List */}

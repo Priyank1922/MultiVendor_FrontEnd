@@ -7,25 +7,27 @@ import {
   Layers,
   Zap,
   Plus,
-  UserCheck,
-  CheckCircle2,
   FileCode2,
   Menu,
   X,
   Sparkles,
   ShieldCheck,
   Edit,
-  User
+  User,
+  LogIn,
+  LogOut,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function Navbar({
-  cartCount,
+  cartCount = 0,
   activeCustomer,
   setActiveCustomer,
-  users = [],
-  isLiveBackend,
-  onOpenCreateModal
+  onOpenAuthModal,
+  onLogout,
+  onOpenCreateModal,
+  onShowToast
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
@@ -41,7 +43,7 @@ export default function Navbar({
 
   useEffect(() => {
     if (editingUser) {
-      setEditFirstName(editingUser.profile?.firstName || editingUser.username || '');
+      setEditFirstName(editingUser.profile?.firstName || editingUser.name || '');
       setEditLastName(editingUser.profile?.lastName || '');
       setEditEmail(editingUser.email || '');
       setEditPhone(editingUser.profile?.phone || '');
@@ -56,16 +58,22 @@ export default function Navbar({
       const updated = await api.updateUser(editingUser.id, {
         firstName: editFirstName,
         lastName: editLastName,
+        name: `${editFirstName} ${editLastName}`.trim(),
         email: editEmail,
         phone: editPhone,
         shippingAddress: editAddress,
-        username: editingUser.username
       });
-      setActiveCustomer(updated);
+      if (setActiveCustomer) setActiveCustomer(updated);
       setEditingUser(null);
-      window.location.reload();
+      if (onShowToast) {
+        onShowToast('success', 'Profile Updated', 'Your customer details were updated.');
+      }
     } catch (err) {
-      alert('Failed to update profile: ' + err.message);
+      if (onShowToast) {
+        onShowToast('error', 'Update Failed', err.message);
+      } else {
+        alert('Failed to update profile: ' + err.message);
+      }
     } finally {
       setUpdatingUser(false);
     }
@@ -78,10 +86,24 @@ export default function Navbar({
 
   // Extract avatar initials
   const getInitials = (user) => {
-    if (user?.profile?.firstName && user?.profile?.lastName) {
+    if (!user) return 'GU';
+    if (user.profile?.firstName && user.profile?.lastName) {
       return `${user.profile.firstName[0]}${user.profile.lastName[0]}`.toUpperCase();
     }
-    return user?.username ? user.username.slice(0, 2).toUpperCase() : 'US';
+    if (user.name) {
+      const parts = user.name.split(' ');
+      if (parts.length > 1) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+      return user.name.slice(0, 2).toUpperCase();
+    }
+    return user.username ? user.username.slice(0, 2).toUpperCase() : 'US';
+  };
+
+  const getDisplayName = (user) => {
+    if (!user) return 'Guest';
+    if (user.profile?.firstName) {
+      return `${user.profile.firstName} ${user.profile.lastName || ''}`.trim();
+    }
+    return user.name || user.username || user.email?.split('@')[0] || 'Customer';
   };
 
   return (
@@ -98,6 +120,9 @@ export default function Navbar({
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-slate-900 text-base tracking-tight group-hover:text-indigo-600 transition-colors">
                   AuraMart
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                  Neon DB
                 </span>
               </div>
             </div>
@@ -186,59 +211,62 @@ export default function Navbar({
               }
             >
               <Layers className="w-3.5 h-3.5 text-purple-400" />
-              Platform Guarantees
+              Platform
             </NavLink>
           </nav>
 
-          {/* Right Section: Customer Profile Switcher & Actions */}
+          {/* Right Section: Customer Profile & Actions */}
           <div className="hidden sm:flex items-center gap-3">
 
-            {/* Active User Profile Pill */}
-            <div className="flex items-center gap-2 bg-slate-100/90 border border-slate-200/90 px-2.5 py-1 rounded-xl text-xs">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
-                {getInitials(activeCustomer)}
+            {/* Authenticated User Pill or Sign In Button */}
+            {activeCustomer ? (
+              <div className="flex items-center gap-2 bg-slate-100/90 border border-slate-200/90 pl-1.5 pr-2.5 py-1 rounded-xl text-xs">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                  {getInitials(activeCustomer)}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold leading-none">
+                    Logged In
+                  </span>
+                  <span className="font-bold text-slate-900 max-w-[120px] truncate leading-tight">
+                    {getDisplayName(activeCustomer)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-0.5 ml-1 border-l border-slate-200 pl-1.5">
+                  <button 
+                    onClick={() => setEditingUser(activeCustomer)}
+                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-md transition-colors cursor-pointer"
+                    title="Edit Account Details"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button 
+                    onClick={onLogout}
+                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold leading-none">Account</span>
-                <select
-                  value={activeCustomer?.profile?.profileId || activeCustomer?.id || 1}
-                  onChange={(e) => {
-                    const selected = users.find(u => (u.profile?.profileId || u.id) === Number(e.target.value));
-                    if (selected) setActiveCustomer(selected);
-                  }}
-                  className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer text-xs pr-1 leading-tight"
-                >
-                  {users.map(u => (
-                    <option key={u.id} value={u.profile?.profileId || u.id}>
-                      {u.profile?.firstName ? `${u.profile.firstName} ${u.profile.lastName}` : u.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button 
-                onClick={() => setEditingUser(activeCustomer)}
-                className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white/60 rounded-md transition-colors cursor-pointer"
-                title="Edit Account Details"
+            ) : (
+              <button
+                onClick={onOpenAuthModal}
+                className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 hover:from-indigo-500 hover:to-purple-600 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm shadow-indigo-500/25 active:scale-95 cursor-pointer"
               >
-                <Edit className="w-3.5 h-3.5" />
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In / Register</span>
               </button>
-            </div>
+            )}
 
-            {/* Platform Health Status Badge */}
-            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50/90 text-emerald-700 border border-emerald-200/80 backdrop-blur-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>Live Store</span>
-            </div>
-
-            {/* Quick Entity Creation Trigger */}
+            {/* Quick Resource Creation Modal Trigger */}
             <button
               onClick={onOpenCreateModal}
-              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-slate-900 to-indigo-950 hover:from-slate-800 hover:to-indigo-900 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all shadow-sm hover:shadow-indigo-500/10 active:scale-95"
+              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-indigo-400" />
+              <Plus className="w-3.5 h-3.5 text-indigo-400" />
               <span>Add Resource</span>
             </button>
 
@@ -246,17 +274,27 @@ export default function Navbar({
 
           {/* Mobile Hamburger Toggle Button */}
           <div className="flex lg:hidden items-center gap-2">
-            <button
-              onClick={onOpenCreateModal}
-              className="sm:hidden inline-flex items-center p-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
-              title="Add Resource"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            {!activeCustomer ? (
+              <button
+                onClick={onOpenAuthModal}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenCreateModal}
+                className="sm:hidden inline-flex items-center p-2 rounded-xl bg-slate-900 text-white text-xs font-semibold"
+                title="Add Resource"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 transition-colors"
+              className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
               aria-label="Toggle Menu"
             >
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -266,12 +304,11 @@ export default function Navbar({
         </div>
       </div>
 
-      {/* Mobile Animated Slide-Down Navigation Drawer */}
+      {/* Mobile Drawer Menu */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-2xl px-4 pt-4 pb-6 space-y-4 shadow-xl animate-fade-in-up">
-
-          {/* Mobile Links */}
-          <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
+        <div className="lg:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200/90 px-4 pt-3 pb-6 space-y-4 shadow-xl animate-fade-in-down">
+          
+          <div className="flex flex-col gap-1 text-sm font-semibold">
             <NavLink
               to="/"
               end
@@ -281,7 +318,7 @@ export default function Navbar({
               }
             >
               <Home className="w-4 h-4 text-indigo-400" />
-              Home
+              Home Overview
             </NavLink>
 
             <NavLink
@@ -292,7 +329,7 @@ export default function Navbar({
               }
             >
               <ShoppingBag className="w-4 h-4 text-indigo-400" />
-              Catalog
+              Browse Catalog
             </NavLink>
 
             <NavLink
@@ -343,50 +380,50 @@ export default function Navbar({
               }
             >
               <Layers className="w-4 h-4 text-purple-400" />
-              Guarantees
+              Platform
             </NavLink>
           </div>
 
           {/* Mobile Profile & Status Controls */}
           <div className="pt-2 border-t border-slate-100 flex flex-col gap-3">
 
-            {/* Customer Switcher */}
-            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xs font-bold">
-                  {getInitials(activeCustomer)}
-                </div>
-                <div className="text-xs">
-                  <div className="text-slate-400 text-[10px]">Active Account</div>
-                  <div className="font-bold text-slate-900">
-                    {activeCustomer?.profile?.firstName ? `${activeCustomer.profile.firstName} ${activeCustomer.profile.lastName}` : activeCustomer?.username}
+            {activeCustomer ? (
+              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xs font-bold">
+                    {getInitials(activeCustomer)}
+                  </div>
+                  <div className="text-xs">
+                    <div className="text-slate-400 text-[10px]">Logged In User</div>
+                    <div className="font-bold text-slate-900">
+                      {getDisplayName(activeCustomer)}
+                    </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditingUser(activeCustomer)}
+                    className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 text-xs font-semibold"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={onLogout}
+                    className="p-1.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-xs font-semibold"
+                  >
+                    Logout
+                  </button>
+                </div>
               </div>
-              <select
-                value={activeCustomer?.profile?.profileId || activeCustomer?.id || 1}
-                onChange={(e) => {
-                  const selected = users.find(u => (u.profile?.profileId || u.id) === Number(e.target.value));
-                  if (selected) setActiveCustomer(selected);
-                }}
-                className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800"
+            ) : (
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); onOpenAuthModal(); }}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold p-3 rounded-xl text-xs shadow-md"
               >
-                {users.map(u => (
-                  <option key={u.id} value={u.profile?.profileId || u.id}>
-                    {u.profile?.firstName ? `${u.profile.firstName} ${u.profile.lastName}` : u.username}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Platform Status */}
-            <div className="flex items-center justify-between text-xs px-1">
-              <span className="text-slate-500">Platform Status:</span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                Live Store Online
-              </span>
-            </div>
+                <LogIn className="w-4 h-4" />
+                Sign In / Create Account
+              </button>
+            )}
 
             {/* Quick Action Button */}
             <button
@@ -394,13 +431,14 @@ export default function Navbar({
               className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white font-semibold p-3 rounded-xl text-xs"
             >
               <Plus className="w-4 h-4 text-indigo-400" />
-              Add Resource / Account
+              Add Resource
             </button>
 
           </div>
 
         </div>
       )}
+
       {/* Edit Profile Modal */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">

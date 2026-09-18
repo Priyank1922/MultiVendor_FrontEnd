@@ -24,22 +24,22 @@ export default function CreateEntityModal({
   // User Form State
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Password123!');
+  const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('9876543210');
-  const [shippingAddress, setShippingAddress] = useState('102 MG Road, Indiranagar');
-  const [city, setCity] = useState('Bengaluru');
-  const [state, setState] = useState('KA');
-  const [zipCode, setZipCode] = useState('560001');
+  const [phone, setPhone] = useState('');
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
 
   // Vendor Form State
   const [storeName, setStoreName] = useState('');
   const [contactName, setContactName] = useState('');
   const [sellerCode, setSellerCode] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [vendorPhone, setVendorPhone] = useState('9876543211');
-  const [vendorAddress, setVendorAddress] = useState('103 MG Road, Indiranagar');
+  const [vendorPhone, setVendorPhone] = useState('');
+  const [vendorAddress, setVendorAddress] = useState('');
 
   // Category Form State
   const [catName, setCatName] = useState('');
@@ -49,9 +49,9 @@ export default function CreateEntityModal({
   const [prodName, setProdName] = useState('');
   const [prodSku, setProdSku] = useState('');
   const [prodPrice, setProdPrice] = useState('');
-  const [prodStock, setProdStock] = useState('100');
-  const [prodCatId, setProdCatId] = useState(categories[0]?.id || 1);
-  const [prodVendId, setProdVendId] = useState(vendors[0]?.id || 1);
+  const [prodStock, setProdStock] = useState('50');
+  const [prodCatId, setProdCatId] = useState(categories[0]?.id || '');
+  const [prodVendId, setProdVendId] = useState(vendors[0]?.id || '');
   const [prodDesc, setProdDesc] = useState('');
 
   if (!isOpen) return null;

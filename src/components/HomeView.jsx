@@ -18,7 +18,7 @@ import {
   Award
 } from 'lucide-react';
 
-export default function HomeView({ categories = [], vendors = [], activeCustomer }) {
+export default function HomeView({ categories = [], vendors = [], activeCustomer, onOpenAuthModal }) {
   return (
     <div className="space-y-16 pb-12 animate-fade-in-up">
       <SEO 
@@ -41,7 +41,7 @@ export default function HomeView({ categories = [], vendors = [], activeCustomer
             {/* User Pill Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 backdrop-blur-md glow-indigo">
               <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>✨ Premium Multi-Vendor Digital Marketplace</span>
+              <span>✨ Powered by Neon PostgreSQL & Spring Boot</span>
             </div>
 
             {/* Main Headline */}
@@ -54,7 +54,7 @@ export default function HomeView({ categories = [], vendors = [], activeCustomer
 
             {/* Subheading */}
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl">
-              Shop thousands of curated items from verified sellers in Bengaluru, Mumbai, Delhi, Jaipur, and pan-India with instant cart consolidation, GST invoices, and express delivery.
+              Shop thousands of curated items from verified sellers with instant cart consolidation, GST invoices, and express delivery directly saved to Neon DB.
             </p>
 
             {/* CTA Action Buttons */}
@@ -68,20 +68,22 @@ export default function HomeView({ categories = [], vendors = [], activeCustomer
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
 
+              {!activeCustomer && (
+                <button
+                  onClick={onOpenAuthModal}
+                  className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold px-5 py-3 rounded-xl transition-all shadow-lg shadow-purple-500/20 hover:-translate-y-0.5 text-sm cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Sign In / Register
+                </button>
+              )}
+
               <Link
                 to="/batch"
                 className="inline-flex items-center gap-2 bg-slate-800/80 hover:bg-slate-800 text-slate-100 font-semibold px-6 py-3 rounded-xl border border-slate-700/80 transition-all hover:-translate-y-0.5 text-sm backdrop-blur-sm"
               >
                 <Zap className="w-4 h-4 text-amber-400" />
-                Merchant Seller Hub
-              </Link>
-
-              <Link
-                to="/showcase"
-                className="inline-flex items-center gap-2 text-indigo-300 hover:text-white font-medium px-4 py-3 text-sm transition-colors"
-              >
-                <Layers className="w-4 h-4 text-purple-400" />
-                Platform Guarantees
+                Seller Hub
               </Link>
             </div>
 

@@ -22,7 +22,7 @@ export default function HibernateShowcase() {
       <SEO 
         title="Marketplace Guarantees & Features | AuraMart"
         description="Learn about AuraMart's buyer protection rules, verified seller compliance, and multi-vendor fulfillment capabilities."
-        canonical="https://auramart.vercel.app/showcase"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/showcase"
       />
       
       {/* Banner Header */}

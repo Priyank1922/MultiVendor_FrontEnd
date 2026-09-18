@@ -24,7 +24,7 @@ export default function HomeView({ categories = [], vendors = [], activeCustomer
       <SEO 
         title="AuraMart - Premier Multi-Vendor Online Marketplace"
         description="AuraMart is India's leading multi-vendor online marketplace. Shop electronics, premium fashion, audio, and wearables from verified sellers with express delivery."
-        canonical="https://auramart.vercel.app/"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/"
       />
       
       {/* HERO SECTION */}

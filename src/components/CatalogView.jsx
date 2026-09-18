@@ -129,7 +129,7 @@ export default function CatalogView({
       <SEO 
         title="Product Catalog | AuraMart - Shop Premium Brands"
         description="Browse curated electronics, fashion, and home essentials on AuraMart."
-        canonical="https://auramart.vercel.app/catalog"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/catalog"
       />
       
       {/* Light Theme Banner Header */}

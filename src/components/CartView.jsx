@@ -109,7 +109,7 @@ export default function CartView({
       <SEO 
         title="Shopping Cart | AuraMart"
         description="View and manage items in your consolidated multi-vendor shopping cart on AuraMart."
-        canonical="https://auramart.vercel.app/cart"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/cart"
       />
       
       {/* Banner Header */}

@@ -61,7 +61,7 @@ export default function OrdersView({ activeCustomer, onShowToast, onOpenAuthModa
       <SEO 
         title="My Orders & Purchase Receipts | AuraMart"
         description="Inspect order history, vendor details, and shipping status for your purchases on AuraMart."
-        canonical="https://auramart.vercel.app/orders"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/orders"
       />
       
       {/* Banner Header */}

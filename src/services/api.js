@@ -1,13 +1,21 @@
 // API Service Client with Live Backend Integration & Neon PostgreSQL
 
-const API_BASE = 'https://multivendor-q15b.onrender.com/';
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://multivendor-q15b.onrender.com';
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 const USER_SESSION_KEY = 'aura_active_user_session';
+
+// Build safe API URLs without duplicate slashes
+export function buildApiUrl(endpoint) {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${API_BASE}${cleanEndpoint}`;
+}
 
 // Helper to make fetch requests with transparent error handling
 async function request(endpoint, options = {}) {
-  const url = endpoint.startsWith('http') 
-    ? endpoint 
-    : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const url = buildApiUrl(endpoint);
 
   let res;
   try {
@@ -103,7 +111,7 @@ export const api = {
   // Check backend health
   async checkBackendHealth() {
     try {
-      const res = await fetch(`${API_BASE}/product`, { method: 'GET' });
+      const res = await fetch(buildApiUrl('/product'), { method: 'GET' });
       return res.ok;
     } catch {
       return false;
@@ -417,12 +425,9 @@ export const api = {
   },
 
   async deleteProduct(id) {
-    const res = await fetch(`${API_BASE}/product/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    return await request(`/product/${id}`, {
+      method: 'DELETE'
     });
-    if (res.ok) return null;
-    throw new Error(`Delete failed: HTTP ${res.status}`);
   },
 
   // ================= CART =================

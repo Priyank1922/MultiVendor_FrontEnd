@@ -1,6 +1,7 @@
-# BharatBazaar (Bharat Bazar) Robots.txt for Vercel Hosting & Search Engine Indexing
+# AuraMart Robots.txt for Vercel Hosting & Search Engine Indexing
 User-agent: *
 Allow: /
 
 # Sitemap Index Link
-Sitemap: https://bharatbazaar.vercel.app/sitemap.xml
+Sitemap: https://multi-vendor-front-end-rust.vercel.app/sitemap.xml
+

@@ -121,7 +121,7 @@ export default function BatchSellerHub({
       <SEO 
         title="Merchant Seller Hub & Bulk Inventory Portal | AuraMart"
         description="Empowering independent sellers to upload bulk product inventory and manage store listings on AuraMart."
-        canonical="https://auramart.vercel.app/batch"
+        canonical="https://multi-vendor-front-end-rust.vercel.app/batch"
       />
       
       {/* Banner Header */}

@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 export default function SEO({ 
   title = "AuraMart - Premier Multi-Vendor Online Marketplace", 
   description = "AuraMart is the leading multi-vendor online marketplace. Discover thousands of products from verified sellers with express delivery.",
-  canonical = "https://auramart.vercel.app/"
+  canonical = (import.meta.env.VITE_SITE_URL ? `${import.meta.env.VITE_SITE_URL.replace(/\/+$/, '')}/` : "https://multi-vendor-front-end-rust.vercel.app/")
 }) {
   useEffect(() => {
     // Update Page Title
